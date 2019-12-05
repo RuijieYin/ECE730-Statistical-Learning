@@ -1,0 +1,292 @@
+---
+title: "Final Project Real Dataset Part"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#Read the training and testing data set
+ziptrain<-read.table(file = "C:/Users/yinru/Dropbox/UM Biostatistics/ECE730 Statistical Learning/Final Project/zip.train.txt")
+ziptest<-read.table(file = "C:/Users/yinru/Dropbox/UM Biostatistics/ECE730 Statistical Learning/Final Project/zip.test.txt")
+```
+
+#Real Data: without feature selection
+```{r}
+#10-fold cv
+set.seed(25592732)
+cv.folds <- function (n, folds = 10) {split(sample(1:n), rep(1:folds, length = n)) }
+cvfolds<-cv.folds(n=dim(ziptrain)[[1]]) 
+
+#Try our classifier without feature selection for real data
+#K=10, p=256
+#Using package "rpart"
+#install.packages("rpart")
+#The only porameter in tree is depth/tree size min=1,max=30
+library(rpart)
+#Calculate missclassification error for each model (different maxdepth)
+tree.zip.err<-matrix(NA,10,1)
+tree.zip.err.mean<-matrix(NA,30,1)
+#could have used lapply, much faster
+for (j in 1:30) {
+  for (i in 1:10) {
+tree.zip<-rpart(V1 ~ .,
+  	method="class", data=ziptrain[-cvfolds[[i]],],control=rpart.control(maxdepth = j))
+tree.zip.pred = predict(tree.zip, newdata=ziptrain[cvfolds[[i]],], type="class")
+ktest<-as.matrix(ziptrain[,1])[cvfolds[[i]],]
+tree.zip.err[i,1] <- mean((ktest != tree.zip.pred))
+  }
+  tree.zip.err.mean[j,1]<-mean(tree.zip.err[,1])
+}
+
+#Find the maxdepth with the smallest cross-validated misclassification error
+depth<-which.min(tree.zip.err.mean)
+paste("The parameter associated with minimum error is",depth,".")
+paste("The corresponding misclassification error is",tree.zip.err.mean[depth,1],".")
+#display the corresponding model
+tree.zip.final<-rpart(V1 ~ .,
+  	method="class", data=ziptrain,control=rpart.control(maxdepth = depth))
+printcp(tree.zip.final)
+
+
+#visualize the cross-validation results 
+#plotcp(tree.train1) 
+#show detailed summary of splits
+#summary(tree.train1) 
+
+# plot the tree.train1 
+plot(tree.zip.final, uniform=TRUE, main="Classification Tree for Train1")
+text(tree.zip.final, use.n=FALSE, all=TRUE, cex=.8)
+```
+
+#Another way
+##Without feature selection
+```{r}
+#A simpler and much faster way:
+fit.tree <- rpart(V1~.,method="class", data=ziptrain)
+#png(filename="C:/Users/yinru/Dropbox/UM Biostatistics/ECE730 Statistical Learning/Final #Project/3.png")
+printcp(fit.tree)
+plot(fit.tree, uniform=TRUE)
+text(fit.tree, use.n=FALSE, all=TRUE, cex=.5)
+#plotcp(fit.tree)
+
+
+pred = predict(fit.tree, newdata=ziptest, type="class")
+ktest<-as.matrix(ziptest[,1])
+tree.zip.err <- mean((ktest != pred))
+tree.zip.err
+```
+
+
+
+#Real Data:with feature selection
+```{r}
+#Calculate the CoV.
+#Should use mean of absolute values; no unifying standard in choosing a cut-off value.
+#cut-off: CoV<1
+var<-NULL
+cov_zip<-matrix(NA,256,1)
+for(i in 1:256) {
+  cov_zip[i,1]<-sd(ziptrain[,i+1])/mean(abs(ziptrain[,i+1]))
+    if (cov_zip[i,1]<1) {
+    print(paste("The selected variable is x",i,sep = ""))
+  }
+}
+var<-which(cov_zip<1)
+var<-var+1
+var_p<-as.character(paste("V",var,sep = ""))
+var_p<-data.frame(var_p)
+var_p$var_p<-as.character(var_p$var_p)
+
+#Generate regression section (text) in the model
+regression<-NULL
+for(i in 1:dim(var_p)[1]){
+  regression<-paste(regression,var_p[i,1],sep = "+")
+}
+regression
+```
+
+```{r}
+#10-fold cv
+set.seed(25592732)
+cv.folds <- function (n, folds = 10) {split(sample(1:n), rep(1:folds, length = n)) }
+cvfolds2<-cv.folds(n=dim(ziptrain)[[1]]) 
+
+#Try our classifier with feature selection for train 1
+#x1 is selected
+#K=3, p=3, p1=2
+#Using package "rpart"
+#install.packages("rpart")
+#The only porameter in tree is depth/tree size min=1,max=30
+library(rpart)
+#Calculate missclassification error for each model (different maxdepth)
+
+tree.zip.err.fs2<-matrix(NA,10,1)
+tree.zip.err.mean.fs2<-matrix(NA,30,1)
+for (j in 1:30) {
+  for (i in 1:10) {
+tree.zip.fs2 <- rpart(V1 ~ V2+V3+V4+V5+V6+V7+V8+V12+V13+V14+V15+V16+V17+V18+V19+V20+V21+V22+V25+V26+V29+V30+V31+V32+V33+V34+V35+V36+V37+V46+V47+V48+V49+V50+V51+V52+V53+V62+V63+V64+V65+V66+V67+V68+V69+V72+V73+V74+V75+V78+V79+V80+V81+V82+V83+V84+V85+V88+V89+V90+V94+V95+V96+V97+V98+V99+V100+V101+V102+V103+V104+V109+V110+V111+V112+V113+V114+V115+V116+V117+V118+V119+V120+V125+V126+V127+V128+V129+V130+V131+V132+V133+V134+V135+V136+V141+V142+V143+V144+V145+V146+V147+V148+V149+V150+V151+V152+V153+V157+V158+V159+V160+V161+V162+V163+V164+V165+V166+V167+V168+V169+V172+V173+V174+V175+V176+V177+V178+V179+V180+V181+V182+V183+V184+V188+V189+V190+V191+V192+V193+V194+V195+V196+V197+V198+V199+V200+V206+V207+V208+V209+V210+V211+V212+V213+V222+V223+V224+V225+V226+V227+V228+V229+V230+V233+V234+V237+V238+V239+V240+V241+V242+V243+V244+V245+V246+V247+V252+V253+V254+V255+V256+V257, method="class",data=ziptrain[-cvfolds2[[i]],], control=rpart.control(maxdepth = j))
+
+tree.zip.pred.fs2 = predict(tree.zip.fs2, newdata=ziptrain[cvfolds2[[i]],], type="class")
+ktest.fs2<-as.matrix(ziptrain[,1])[cvfolds2[[i]],]
+tree.zip.err.fs2[i,1] <- mean((ktest.fs2 != tree.zip.pred.fs2))
+  }
+  tree.zip.err.mean.fs2[j,1]<-mean(tree.zip.err.fs2[,1])
+}
+
+#Find the maxdepth with the smallest cross-validated misclassification error
+depth<-which.min(tree.zip.err.mean.fs2)
+paste("The parameter associated with minimum error is",depth,".")
+paste("The corresponding misclassification error is",tree.zip.err.mean.fs2[depth,1],".")
+#display the corresponding final model
+tree.zip.final.fs2<-rpart(V1 ~V2+V3+V4+V5+V6+V7+V8+V12+V13+V14+V15+V16+V17+V18+V19+V20+V21+V22+V25+V26+V29+V30+V31+V32+V33+V34+V35+V36+V37+V46+V47+V48+V49+V50+V51+V52+V53+V62+V63+V64+V65+V66+V67+V68+V69+V72+V73+V74+V75+V78+V79+V80+V81+V82+V83+V84+V85+V88+V89+V90+V94+V95+V96+V97+V98+V99+V100+V101+V102+V103+V104+V109+V110+V111+V112+V113+V114+V115+V116+V117+V118+V119+V120+V125+V126+V127+V128+V129+V130+V131+V132+V133+V134+V135+V136+V141+V142+V143+V144+V145+V146+V147+V148+V149+V150+V151+V152+V153+V157+V158+V159+V160+V161+V162+V163+V164+V165+V166+V167+V168+V169+V172+V173+V174+V175+V176+V177+V178+V179+V180+V181+V182+V183+V184+V188+V189+V190+V191+V192+V193+V194+V195+V196+V197+V198+V199+V200+V206+V207+V208+V209+V210+V211+V212+V213+V222+V223+V224+V225+V226+V227+V228+V229+V230+V233+V234+V237+V238+V239+V240+V241+V242+V243+V244+V245+V246+V247+V252+V253+V254+V255+V256+V257,
+  	method="class", data=ziptrain, control=rpart.control(maxdepth = depth))
+printcp(tree.zip.final.fs2)
+
+# plot the tree.train1 
+plot(tree.zip.final.fs2, uniform=TRUE, main="Classification Tree for Train1")
+text(tree.zip.final.fs2, use.n=TRUE, all=TRUE, cex=.8)
+```
+
+
+
+#Prediction error on test data
+#Both models w. and w.o feature selection
+```{r}
+tree.zip.pred.test1 = predict(tree.zip.final, newdata=ziptest, type="class")
+ktest.1<-as.matrix(ziptest[,1])
+tree.zip.err.final.1 <- mean(ktest.1 != tree.zip.pred.test1)
+paste("The prediction error for our classifier without feature selection is", tree.zip.err.final.1)
+
+
+tree.zip.pred.test2 = predict(tree.zip.final.fs2, newdata=ziptest, type="class")
+ktest.2<-as.matrix(ziptest[,1])
+tree.zip.err.final.2 <- mean(ktest.2 != tree.zip.pred.test2)
+paste("The prediction error for our classifier with feature selection is", tree.zip.err.final.2)
+```
+
+
+
+
+
+#Real Data:with feature selection
+#A different feature selection method:cov_zip>0.4
+```{r}
+#Calculate the CoV.
+#Should use mean of absolute values; no unifying standard in choosing a cut-off value.
+#cut-off: CoV<1
+var<-NULL
+cov_zip<-matrix(NA,256,1)
+for(i in 1:256) {
+  cov_zip[i,1]<-sd(ziptrain[,i+1])/mean(abs(ziptrain[,i+1]))
+    #if (cov_zip[i,1]<1) {
+    #print(paste("The selected variable is x",i,sep = ""))
+  #}
+}
+var<-which(cov_zip>0.4 & cov_zip<1)
+var<-var+1
+var_p<-as.character(paste("V",var,sep = ""))
+var_p<-data.frame(var_p)
+var_p$var_p<-as.character(var_p$var_p)
+
+#Generate regression section (text) in the model
+regression2<-NULL
+for(i in 1:dim(var_p)[1]){
+  regression2<-paste(regression2,var_p[i,1],sep = "+")
+}
+regression2
+```
+
+
+#>0.4
+```{r}
+fit.tree2 <- rpart(V1 ~ V6+V7+V8+V12+V13+V14+V20+V21+V22+V25+V26+V29+V30+V31+V36+V37+V46+V47+V52+V53+V62+V63+V67+V68+V69+V72+V73+V74+V75+V78+V79+V83+V84+V85+V88+V89+V90+V94+V95+V96+V99+V100+V101+V102+V103+V104+V109+V110+V111+V112+V115+V116+V117+V118+V119+V120+V125+V126+V127+V128+V131+V132+V133+V134+V135+V136+V141+V142+V143+V144+V147+V148+V149+V150+V151+V152+V153+V157+V158+V159+V160+V163+V164+V165+V166+V167+V168+V169+V172+V173+V174+V175+V176+V179+V180+V181+V182+V183+V184+V188+V189+V190+V191+V192+V195+V196+V197+V198+V199+V200+V206+V207+V208+V211+V212+V213+V222+V223+V224+V228+V229+V230+V233+V234+V237+V238+V239+V246+V247+V252+V253,
+             method="class", data=ziptrain)
+#png(filename="C:/Users/yinru/Dropbox/UM Biostatistics/ECE730 Statistical Learning/Final #Project/4.png")
+printcp(fit.tree2)
+plot(fit.tree2, uniform=TRUE)
+text(fit.tree2, use.n=FALSE, all=TRUE, cex=.5)
+#plotcp(fit.tree2)
+#rsq.rpart(fit.tree1)
+
+pred = predict(fit.tree2, newdata=ziptest, type="class")
+ktest<-as.matrix(ziptest[,1])
+tree.zip.err <- mean((ktest != pred))
+tree.zip.err
+```
+
+
+#>0.05
+```{r}
+fit.tree2 <- rpart(V1 ~ V2+V3+V4+V5+V6+V7+V8+V12+V13+V14+V15+V16+V17+V18+V19+V20+V21+V22+V25+V26+V29+V30+V31+V32+V33+V34+V35+V36+V37+V46+V47+V48+V49+V50+V51+V52+V53+V62+V63+V64+V65+V66+V67+V68+V69+V72+V73+V74+V75+V78+V79+V80+V81+V82+V83+V84+V85+V88+V89+V90+V94+V95+V96+V97+V98+V99+V100+V101+V102+V103+V104+V109+V110+V111+V112+V113+V114+V115+V116+V117+V118+V119+V120+V125+V126+V127+V128+V129+V130+V131+V132+V133+V134+V135+V136+V141+V142+V143+V144+V145+V146+V147+V148+V149+V150+V151+V152+V153+V157+V158+V159+V160+V161+V162+V163+V164+V165+V166+V167+V168+V169+V172+V173+V174+V175+V176+V177+V178+V179+V180+V181+V182+V183+V184+V188+V189+V190+V191+V192+V193+V194+V195+V196+V197+V198+V199+V200+V206+V207+V208+V209+V210+V211+V212+V213+V222+V223+V224+V225+V226+V227+V228+V229+V230+V233+V234+V237+V238+V239+V240+V241+V243+V244+V245+V246+V247+V252+V253+V254+V255+V256+V257,
+                   method="class", data=ziptrain
+)
+printcp(fit.tree2)
+plot(fit.tree2, uniform=TRUE)
+text(fit.tree2, use.n=FALSE, all=TRUE, cex=.5)
+plotcp(fit.tree2)
+#rsq.rpart(fit.tree1)
+
+pred = predict(fit.tre21, newdata=ziptest, type="class")
+ktest<-as.matrix(ziptest[,1])
+tree.zip.err <- mean((ktest != pred))
+tree.zip.err
+```
+
+
+
+#>0.15
+```{r}
+fit.tree3 <- rpart(V1 ~ V3+V4+V5+V6+V7+V8+V12+V13+V14+V15+V16+V19+V20+V21+V22+V25+V26+V29+V30+V31+V32+V33+V35+V36+V37+V46+V47+V48+V49+V50+V51+V52+V53+V62+V63+V64+V65+V66+V67+V68+V69+V72+V73+V74+V75+V78+V79+V80+V82+V83+V84+V85+V88+V89+V90+V94+V95+V96+V97+V98+V99+V100+V101+V102+V103+V104+V109+V110+V111+V112+V113+V114+V115+V116+V117+V118+V119+V120+V125+V126+V127+V128+V129+V130+V131+V132+V133+V134+V135+V136+V141+V142+V143+V144+V145+V146+V147+V148+V149+V150+V151+V152+V153+V157+V158+V159+V160+V161+V162+V163+V164+V165+V166+V167+V168+V169+V172+V173+V174+V175+V176+V177+V178+V179+V180+V181+V182+V183+V184+V188+V189+V190+V191+V192+V193+V194+V195+V196+V197+V198+V199+V200+V206+V207+V208+V209+V210+V211+V212+V213+V222+V223+V224+V225+V227+V228+V229+V230+V233+V234+V237+V238+V239+V240+V241+V244+V245+V246+V247+V252+V253+V254+V255+V256,
+                   method="class", data=ziptrain
+)
+printcp(fit.tree3)
+plot(fit.tree3, uniform=TRUE)
+text(fit.tree3, use.n=FALSE, all=TRUE, cex=.5)
+plotcp(fit.tree3)
+#rsq.rpart(fit.tree1)
+
+pred3 = predict(fit.tree3, newdata=ziptest, type="class")
+ktest<-as.matrix(ziptest[,1])
+tree.zip.err3 <- mean((ktest != pred3))
+tree.zip.err3
+```
+
+
+#>0.25
+```{r}
+fit.tree4 <- rpart(V1 ~ V4+V5+V6+V7+V8+V12+V13+V14+V15+V19+V20+V21+V22+V25+V26+V29+V30+V31+V32+V35+V36+V37+V46+V47+V48+V51+V52+V53+V62+V63+V64+V67+V68+V69+V72+V73+V74+V75+V78+V79+V80+V83+V84+V85+V88+V89+V90+V94+V95+V96+V99+V100+V101+V102+V103+V104+V109+V110+V111+V112+V114+V115+V116+V117+V118+V119+V120+V125+V126+V127+V128+V129+V130+V131+V132+V133+V134+V135+V136+V141+V142+V143+V144+V145+V146+V147+V148+V149+V150+V151+V152+V153+V157+V158+V159+V160+V161+V162+V163+V164+V165+V166+V167+V168+V169+V172+V173+V174+V175+V176+V177+V178+V179+V180+V181+V182+V183+V184+V188+V189+V190+V191+V192+V193+V194+V195+V196+V197+V198+V199+V200+V206+V207+V208+V211+V212+V213+V222+V223+V224+V227+V228+V229+V230+V233+V234+V237+V238+V239+V240+V245+V246+V247+V252+V253+V254,
+                   method="class", data=ziptrain
+)
+printcp(fit.tree4)
+plot(fit.tree4, uniform=TRUE)
+text(fit.tree4, use.n=FALSE, all=TRUE, cex=.5)
+plotcp(fit.tree4)
+#rsq.rpart(fit.tree1)
+
+pred4 = predict(fit.tree4, newdata=ziptest, type="class")
+ktest<-as.matrix(ziptest[,1])
+tree.zip.err4 <- mean((ktest != pred4))
+tree.zip.err4
+```
+
+
+#>0.9
+```{r}
+fit.tree6 <- rpart(V1 ~ V7+V8+V12+V22+V25+V26+V29+V30+V37+V46+V53+V62+V69+V72+V73+V74+V75+V78+V84+V85+V88+V89+V90+V94+V100+V101+V102+V103+V104+V109+V110+V116+V117+V118+V119+V120+V125+V126+V127+V132+V133+V134+V135+V136+V141+V142+V143+V148+V149+V150+V151+V152+V153+V157+V158+V159+V164+V165+V166+V167+V168+V169+V172+V173+V174+V175+V180+V181+V182+V183+V184+V188+V189+V190+V191+V196+V197+V198+V199+V200+V206+V207+V212+V213+V222+V229+V230+V233+V234+V237+V247+V252,
+                   method="class", data=ziptrain
+)
+printcp(fit.tree6)
+plot(fit.tree6, uniform=TRUE)
+text(fit.tree6, use.n=FALSE, all=TRUE, cex=.5)
+plotcp(fit.tree6)
+#rsq.rpart(fit.tree1)
+
+pred6 = predict(fit.tree6, newdata=ziptest, type="class")
+ktest<-as.matrix(ziptest[,1])
+tree.zip.err6 <- mean((ktest != pred6))
+tree.zip.err6
+```
+

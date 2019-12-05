@@ -1,0 +1,1736 @@
+---
+title: "Final Project Simulation Part"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Train1
+##The dataset 1 in the report
+```{r}
+#Simulation of training data
+#Case 1: K=3 classes and p=3 features, p1=2.
+#sigma is set to 1.
+#Covairance matrix is called Sigma.
+##Generate 100 obs for each of the class label.
+#install.packages("MASS")
+library(MASS)
+Sigma<-sigma<-matrix(c(1,0,0,
+0,1,0,
+0,0,1),byrow=TRUE,nrow=3)
+mu1<-c(1,2,0)
+class1_data<-mvrnorm(n=100,mu=mu1,Sigma=Sigma)
+mu2<-c(2,3,0)
+class2_data<-mvrnorm(n=100,mu=mu2,Sigma=Sigma)
+mu3<-c(3,4,0)
+class3_data<-mvrnorm(n=100,mu=mu3,Sigma=Sigma)
+#Generate labels
+k<-matrix(c(rep(1,100),rep(2,100),rep(3,100)),nrow=300)
+#Final training data set
+train1<-as.data.frame(cbind(k,rbind(class1_data,class2_data,class3_data)))
+colnames(train1)<-c("k","x1","x2","x3")
+```
+#train 1:without feature selection
+```{r}
+#10-fold cv
+set.seed(25592732)
+cv.folds <- function (n, folds = 10) {split(sample(1:n), rep(1:folds, length = n)) }
+cvfolds<-cv.folds(n=dim(train1)[[1]]) 
+
+#Try our classifier without feature selection for train 1
+#K=3, p=3, p1=2
+#Using package "rpart"
+#install.packages("rpart")
+#The only porameter in tree is depth/tree size min=1,max=30
+library(rpart)
+#Calculate missclassification error for each model (different maxdepth)
+
+tree.train1.err<-matrix(NA,10,1)
+tree.train1.err.mean<-matrix(NA,30,1)
+for (j in 1:30) {
+  for (i in 1:10) {
+tree.train1<-rpart(k ~ x1+x2+x3,
+  	method="class", data=train1[-cvfolds[[i]],],control=rpart.control(maxdepth = j))
+tree.train1.pred = predict(tree.train1, newdata=train1[cvfolds[[i]],], type="class")
+ktest<-as.matrix(train1[,1])[cvfolds[[i]],]
+tree.train1.err[i,1] <- mean((ktest != tree.train1.pred))
+  }
+  tree.train1.err.mean[j,1]<-mean(tree.train1.err[,1])
+}
+
+#Find the maxdepth with the smallest cross-validated misclassification error
+depth<-which.min(tree.train1.err.mean)
+paste("The parameter associated with minimum error is",depth,".")
+paste("The corresponding misclassification error is",tree.train1.err.mean[depth,1],".")
+#display the corresponding results 
+tree.train1.final<-rpart(k ~ x1+x2+x3,
+  	method="class", data=train1,control=rpart.control(maxdepth = depth))
+printcp(tree.train1.final)
+
+
+#visualize the cross-validation results 
+#plotcp(tree.train1) 
+#show detailed summary of splits
+#summary(tree.train1) 
+
+# plot the tree.train1 
+plot(tree.train1.final, uniform=TRUE, main="Classification Tree for Train1")
+text(tree.train1.final, use.n=TRUE, all=TRUE, cex=.8)
+```
+#train 1:with feature selection
+```{r}
+#Calculate the CoV.
+#Should use mean of absolute values; no unifying standard in choosing a cut-off value.
+#cov_train1_x1<-sd(train1[,2])/mean(abs(train1[,2]))
+#cov_train1_x2<-sd(train1[,3])/mean(abs(train1[,3]))
+#cov_train1_x3<-sd(train1[,4])/mean(abs(train1[,4]))
+#cut-off: CoV<1
+cov_train1<-matrix(NA,3,1)
+for(i in 1:3) {
+  cov_train1[i,1]<-sd(train1[,i+1])/mean(abs(train1[,i+1]))
+    if (cov_train1[i,1]<1) {
+    print(paste("The selected variable is x",i,sep = ""))
+  }
+}
+
+#10-fold cv
+set.seed(25592732)
+cv.folds <- function (n, folds = 10) {split(sample(1:n), rep(1:folds, length = n)) }
+cvfolds<-cv.folds(n=dim(train1)[[1]]) 
+
+#Try our classifier with feature selection for train 1
+#x1 is selected
+#K=3, p=3, p1=2
+#Using package "rpart"
+#install.packages("rpart")
+#The only porameter in tree is depth/tree size min=1,max=30
+library(rpart)
+#Calculate missclassification error for each model (different maxdepth)
+
+tree.train1.err.fs<-matrix(NA,10,1)
+tree.train1.err.mean.fs<-matrix(NA,30,1)
+for (j in 1:30) {
+  for (i in 1:10) {
+tree.train1.fs<-rpart(k ~ x1+x2,method="class", data=train1[-cvfolds[[i]],],control=rpart.control(maxdepth = j))
+tree.train1.pred.fs = predict(tree.train1.fs, newdata=train1[cvfolds[[i]],], type="class")
+ktest.fs<-as.matrix(train1[,1])[cvfolds[[i]],]
+tree.train1.err.fs[i,1] <- mean((ktest.fs != tree.train1.pred.fs))
+  }
+  tree.train1.err.mean.fs[j,1]<-mean(tree.train1.err.fs[,1])
+}
+
+#Find the maxdepth with the smallest cross-validated misclassification error
+depth<-which.min(tree.train1.err.mean.fs)
+paste("The parameter associated with minimum error is",depth,".")
+paste("The corresponding misclassification error is",tree.train1.err.mean.fs[depth,1],".")
+#display the corresponding results 
+tree.train1.final.fs<-rpart(k ~ x1+x2,
+  	method="class", data=train1,control=rpart.control(maxdepth = depth))
+printcp(tree.train1.final.fs)
+
+# plot the tree.train1 
+plot(tree.train1.final.fs, uniform=TRUE, main="Classification Tree for Train1")
+text(tree.train1.final.fs, use.n=TRUE, all=TRUE, cex=.8)
+```
+
+
+#Train5
+##The dataset 2 in the report
+```{r}
+#Simulation of training data
+#Case 1: K=3 classes and p=3 features, p1=2.
+#sigma is set to 2.
+#Covariance matrix is called Sigma.
+##Generate 100 obs for each of the class label.
+#install.packages("MASS")
+library(MASS)
+Sigma2<-sigma2<-matrix(c(4,0,0,
+0,4,0,
+0,0,4),byrow=TRUE,nrow=3)
+mu1<-c(1,2,0)
+class1_data<-mvrnorm(n=100,mu=mu1,Sigma=sigma2)
+mu2<-c(2,3,0)
+class2_data<-mvrnorm(n=100,mu=mu2,Sigma=sigma2)
+mu3<-c(3,4,0)
+class3_data<-mvrnorm(n=100,mu=mu3,Sigma=sigma2)
+#Generate labels
+k<-matrix(c(rep(1,100),rep(2,100),rep(3,100)),nrow=300)
+#Final training data set
+train5<-as.data.frame(cbind(k,rbind(class1_data,class2_data,class3_data)))
+colnames(train5)<-c("k","x1","x2","x3")
+```
+#train 5:without feature selection
+```{r}
+#10-fold cv
+set.seed(25592732)
+cv.folds <- function (n, folds = 10) {split(sample(1:n), rep(1:folds, length = n)) }
+cvfolds<-cv.folds(n=dim(train5)[[1]]) 
+
+#Try our classifier without feature selection for train 1
+#K=3, p=3, p1=2
+#Using package "rpart"
+#install.packages("rpart")
+#The only porameter in tree is depth/tree size min=1,max=30
+library(rpart)
+#Calculate missclassification error for each model (different maxdepth)
+
+tree.train5.err<-matrix(NA,10,1)
+tree.train5.err.mean<-matrix(NA,30,1)
+for (j in 1:30) {
+  for (i in 1:10) {
+tree.train5<-rpart(k ~ x1+x2+x3,
+  	method="class", data=train5[-cvfolds[[i]],],control=rpart.control(maxdepth = j))
+tree.train5.pred = predict(tree.train5, newdata=train5[cvfolds[[i]],], type="class")
+ktest<-as.matrix(train5[,1])[cvfolds[[i]],]
+tree.train5.err[i,1] <- mean((ktest != tree.train5.pred))
+  }
+  tree.train5.err.mean[j,1]<-mean(tree.train5.err[,1])
+}
+
+#Find the maxdepth with the smallest cross-validated misclassification error
+depth<-which.min(tree.train5.err.mean)
+paste("The parameter associated with minimum error is",depth,".")
+paste("The corresponding misclassification error is",tree.train5.err.mean[depth,1],".")
+#display the corresponding results 
+tree.train5.final<-rpart(k ~ x1+x2+x3,
+  	method="class", data=train5,control=rpart.control(maxdepth = depth))
+printcp(tree.train5.final)
+
+
+#visualize the cross-validation results 
+#plotcp(tree.train1) 
+#show detailed summary of splits
+#summary(tree.train1) 
+
+# plot the tree.train1 
+plot(tree.train5.final, uniform=TRUE, main="Classification Tree for Train1")
+text(tree.train5.final, use.n=TRUE, all=TRUE, cex=.8)
+```
+#train 5:with feature selection
+```{r}
+#Calculate the CoV.
+#Should use mean of absolute values; no unifying standard in choosing a cut-off value.
+#cov_train1_x1<-sd(train1[,2])/mean(abs(train1[,2]))
+#cov_train1_x2<-sd(train1[,3])/mean(abs(train1[,3]))
+#cov_train1_x3<-sd(train1[,4])/mean(abs(train1[,4]))
+#cut-off: CoV<1
+cov_train5<-matrix(NA,3,1)
+for(i in 1:3) {
+  cov_train5[i,1]<-sd(train5[,i+1])/mean(abs(train5[,i+1]))
+    if (cov_train5[i,1]<1) {
+    print(paste("The selected variable is x",i,sep = ""))
+  }
+}
+
+#10-fold cv
+set.seed(25592732)
+cv.folds <- function (n, folds = 10) {split(sample(1:n), rep(1:folds, length = n)) }
+cvfolds<-cv.folds(n=dim(train5)[[1]]) 
+
+#Try our classifier with feature selection for train 1
+#x1 is selected
+#K=3, p=3, p1=2
+#Using package "rpart"
+#install.packages("rpart")
+#The only porameter in tree is depth/tree size min=1,max=30
+library(rpart)
+#Calculate missclassification error for each model (different maxdepth)
+
+tree.train5.err.fs<-matrix(NA,10,1)
+tree.train5.err.mean.fs<-matrix(NA,30,1)
+for (j in 1:30) {
+  for (i in 1:10) {
+tree.train5.fs<-rpart(k ~ x1+x2,method="class", data=train5[-cvfolds[[i]],],control=rpart.control(maxdepth = j))
+tree.train5.pred.fs = predict(tree.train5.fs, newdata=train5[cvfolds[[i]],], type="class")
+ktest.fs<-as.matrix(train5[,1])[cvfolds[[i]],]
+tree.train5.err.fs[i,1] <- mean((ktest.fs != tree.train5.pred.fs))
+  }
+  tree.train5.err.mean.fs[j,1]<-mean(tree.train5.err.fs[,1])
+}
+
+#Find the maxdepth with the smallest cross-validated misclassification error
+depth<-which.min(tree.train5.err.mean.fs)
+paste("The parameter associated with minimum error is",depth,".")
+paste("The corresponding misclassification error is",tree.train5.err.mean.fs[depth,1],".")
+#display the corresponding results 
+tree.train5.final.fs<-rpart(k ~ x1+x2,
+  	method="class", data=train5,control=rpart.control(maxdepth = depth))
+printcp(tree.train5.final.fs)
+
+# plot the tree.train1 
+plot(tree.train5.final.fs, uniform=TRUE, main="Classification Tree for Train1")
+text(tree.train5.final.fs, use.n=TRUE, all=TRUE, cex=.8)
+```
+
+
+#Train6
+#Dataset 3 in the report
+```{r}
+#Simulation of training data
+#Case 1: K=3 classes and p=3 features, p1=2.
+#sigma is set to 3.
+#Covariance matrix is called Sigma.
+##Generate 100 obs for each of the class label.
+#install.packages("MASS")
+library(MASS)
+Sigma3<-sigma3<-matrix(c(9,0,0,
+0,9,0,
+0,0,9),byrow=TRUE,nrow=3)
+mu1<-c(1,2,0)
+class1_data<-mvrnorm(n=100,mu=mu1,Sigma=sigma3)
+mu2<-c(2,3,0)
+class2_data<-mvrnorm(n=100,mu=mu2,Sigma=sigma3)
+mu3<-c(3,4,0)
+class3_data<-mvrnorm(n=100,mu=mu3,Sigma=sigma3)
+#Generate labels
+k<-matrix(c(rep(1,100),rep(2,100),rep(3,100)),nrow=300)
+#Final training data set
+train6<-as.data.frame(cbind(k,rbind(class1_data,class2_data,class3_data)))
+colnames(train6)<-c("k","x1","x2","x3")
+```
+#train 6:without feature selection
+```{r}
+#10-fold cv
+set.seed(25592732)
+cv.folds <- function (n, folds = 10) {split(sample(1:n), rep(1:folds, length = n)) }
+cvfolds<-cv.folds(n=dim(train6)[[1]]) 
+
+#Try our classifier without feature selection for train 1
+#K=3, p=3, p1=2
+#Using package "rpart"
+#install.packages("rpart")
+#The only porameter in tree is depth/tree size min=1,max=30
+library(rpart)
+#Calculate missclassification error for each model (different maxdepth)
+
+tree.train6.err<-matrix(NA,10,1)
+tree.train6.err.mean<-matrix(NA,30,1)
+for (j in 1:30) {
+  for (i in 1:10) {
+tree.train6<-rpart(k ~ x1+x2+x3,
+  	method="class", data=train6[-cvfolds[[i]],],control=rpart.control(maxdepth = j))
+tree.train6.pred = predict(tree.train6, newdata=train6[cvfolds[[i]],], type="class")
+ktest<-as.matrix(train6[,1])[cvfolds[[i]],]
+tree.train6.err[i,1] <- mean((ktest != tree.train6.pred))
+  }
+  tree.train6.err.mean[j,1]<-mean(tree.train6.err[,1])
+}
+
+#Find the maxdepth with the smallest cross-validated misclassification error
+depth<-which.min(tree.train6.err.mean)
+paste("The parameter associated with minimum error is",depth,".")
+paste("The corresponding misclassification error is",tree.train6.err.mean[depth,1],".")
+#display the corresponding results 
+tree.train6.final<-rpart(k ~ x1+x2+x3,
+  	method="class", data=train6,control=rpart.control(maxdepth = depth))
+printcp(tree.train6.final)
+
+
+#visualize the cross-validation results 
+#plotcp(tree.train1) 
+#show detailed summary of splits
+#summary(tree.train1) 
+
+# plot the tree.train1 
+plot(tree.train6.final, uniform=TRUE, main="Classification Tree for Train1")
+text(tree.train6.final, use.n=TRUE, all=TRUE, cex=.8)
+```
+#train 6:with feature selection
+```{r}
+#Calculate the CoV.
+#Should use mean of absolute values; no unifying standard in choosing a cut-off value.
+#cov_train1_x1<-sd(train1[,2])/mean(abs(train1[,2]))
+#cov_train1_x2<-sd(train1[,3])/mean(abs(train1[,3]))
+#cov_train1_x3<-sd(train1[,4])/mean(abs(train1[,4]))
+#cut-off: CoV<1
+cov_train6<-matrix(NA,3,1)
+for(i in 1:3) {
+  cov_train6[i,1]<-sd(train6[,i+1])/mean(abs(train6[,i+1]))
+    if (cov_train6[i,1]<1) {
+    print(paste("The selected variable is x",i,sep = ""))
+  }
+}
+
+#10-fold cv
+set.seed(25592732)
+cv.folds <- function (n, folds = 10) {split(sample(1:n), rep(1:folds, length = n)) }
+cvfolds<-cv.folds(n=dim(train6)[[1]]) 
+
+#Try our classifier with feature selection for train 1
+#x1 is selected
+#K=3, p=3, p1=2
+#Using package "rpart"
+#install.packages("rpart")
+#The only porameter in tree is depth/tree size min=1,max=30
+library(rpart)
+#Calculate missclassification error for each model (different maxdepth)
+
+tree.train6.err.fs<-matrix(NA,10,1)
+tree.train6.err.mean.fs<-matrix(NA,30,1)
+for (j in 1:30) {
+  for (i in 1:10) {
+tree.train6.fs<-rpart(k ~ x1+x2,method="class", data=train6[-cvfolds[[i]],],control=rpart.control(maxdepth = j))
+tree.train6.pred.fs = predict(tree.train6.fs, newdata=train6[cvfolds[[i]],], type="class")
+ktest.fs<-as.matrix(train6[,1])[cvfolds[[i]],]
+tree.train6.err.fs[i,1] <- mean((ktest.fs != tree.train6.pred.fs))
+  }
+  tree.train6.err.mean.fs[j,1]<-mean(tree.train6.err.fs[,1])
+}
+
+#Find the maxdepth with the smallest cross-validated misclassification error
+depth<-which.min(tree.train6.err.mean.fs)
+paste("The parameter associated with minimum error is",depth,".")
+paste("The corresponding misclassification error is",tree.train6.err.mean.fs[depth,1],".")
+#display the corresponding results 
+tree.train6.final.fs<-rpart(k ~ x1+x2,
+  	method="class", data=train6,control=rpart.control(maxdepth = depth))
+printcp(tree.train6.final.fs)
+
+# plot the tree.train1 
+plot(tree.train6.final.fs, uniform=TRUE, main="Classification Tree for Train1")
+text(tree.train6.final.fs, use.n=TRUE, all=TRUE, cex=.8)
+```
+
+
+#Train7 
+#Dataset 4 in the report
+```{r}
+#Simulation of training data
+#Case 1: K=3 classes and p=4 features, p1=2.
+#sigma is set to 1.
+#Covariance matrix is called Sigma.
+##Generate 100 obs for each of the class label.
+#install.packages("MASS")
+library(MASS)
+Sigma4<-sigma4<-matrix(c(1,0,0,0,
+0,1,0,0,
+0,0,1,0,
+0,0,0,1),byrow=TRUE,nrow=4)
+mu1<-c(1,2,0,0)
+class1_data<-mvrnorm(n=100,mu=mu1,Sigma=sigma4)
+mu2<-c(2,3,0,0)
+class2_data<-mvrnorm(n=100,mu=mu2,Sigma=sigma4)
+mu3<-c(3,4,0,0)
+class3_data<-mvrnorm(n=100,mu=mu3,Sigma=sigma4)
+#Generate labels
+k<-matrix(c(rep(1,100),rep(2,100),rep(3,100)),nrow=300)
+#Final training data set
+train7<-as.data.frame(cbind(k,rbind(class1_data,class2_data,class3_data)))
+colnames(train7)<-c("k","x1","x2","x3","x4")
+```
+#train 7:without feature selection
+```{r}
+#10-fold cv
+set.seed(25592732)
+cv.folds <- function (n, folds = 10) {split(sample(1:n), rep(1:folds, length = n)) }
+cvfolds<-cv.folds(n=dim(train7)[[1]]) 
+
+#Try our classifier without feature selection for train 1
+#K=3, p=3, p1=2
+#Using package "rpart"
+#install.packages("rpart")
+#The only porameter in tree is depth/tree size min=1,max=30
+library(rpart)
+#Calculate missclassification error for each model (different maxdepth)
+
+tree.train7.err<-matrix(NA,10,1)
+tree.train7.err.mean<-matrix(NA,30,1)
+for (j in 1:30) {
+  for (i in 1:10) {
+tree.train7<-rpart(k ~ x1+x2+x3+x4,
+  	method="class", data=train7[-cvfolds[[i]],],control=rpart.control(maxdepth = j))
+tree.train7.pred = predict(tree.train7, newdata=train7[cvfolds[[i]],], type="class")
+ktest<-as.matrix(train7[,1])[cvfolds[[i]],]
+tree.train7.err[i,1] <- mean((ktest != tree.train7.pred))
+  }
+  tree.train7.err.mean[j,1]<-mean(tree.train7.err[,1])
+}
+
+#Find the maxdepth with the smallest cross-validated misclassification error
+depth<-which.min(tree.train7.err.mean)
+paste("The parameter associated with minimum error is",depth,".")
+paste("The corresponding misclassification error is",tree.train7.err.mean[depth,1],".")
+#display the corresponding results 
+tree.train7.final<-rpart(k ~ x1+x2+x3+x4,
+  	method="class", data=train7,control=rpart.control(maxdepth = depth))
+printcp(tree.train7.final)
+
+
+#visualize the cross-validation results 
+#plotcp(tree.train1) 
+#show detailed summary of splits
+#summary(tree.train1) 
+
+# plot the tree.train1 
+plot(tree.train7.final, uniform=TRUE, main="Classification Tree for Train1")
+text(tree.train7.final, use.n=TRUE, all=TRUE, cex=.8)
+```
+#train 7:with feature selection
+```{r}
+#Calculate the CoV.
+#Should use mean of absolute values; no unifying standard in choosing a cut-off value.
+#cov_train1_x1<-sd(train1[,2])/mean(abs(train1[,2]))
+#cov_train1_x2<-sd(train1[,3])/mean(abs(train1[,3]))
+#cov_train1_x3<-sd(train1[,4])/mean(abs(train1[,4]))
+#cut-off: CoV<1
+cov_train7<-matrix(NA,4,1)
+for(i in 1:4) {
+  cov_train7[i,1]<-sd(train7[,i+1])/mean(abs(train7[,i+1]))
+    if (cov_train7[i,1]<1) {
+    print(paste("The selected variable is x",i,sep = ""))
+  }
+}
+
+#10-fold cv
+set.seed(25592732)
+cv.folds <- function (n, folds = 10) {split(sample(1:n), rep(1:folds, length = n)) }
+cvfolds<-cv.folds(n=dim(train7)[[1]]) 
+
+#Try our classifier with feature selection for train 1
+#x1 is selected
+#K=3, p=3, p1=2
+#Using package "rpart"
+#install.packages("rpart")
+#The only porameter in tree is depth/tree size min=1,max=30
+library(rpart)
+#Calculate missclassification error for each model (different maxdepth)
+
+tree.train7.err.fs<-matrix(NA,10,1)
+tree.train7.err.mean.fs<-matrix(NA,30,1)
+for (j in 1:30) {
+  for (i in 1:10) {
+tree.train7.fs<-rpart(k ~ x1+x2,method="class", data=train7[-cvfolds[[i]],],control=rpart.control(maxdepth = j))
+tree.train7.pred.fs = predict(tree.train7.fs, newdata=train7[cvfolds[[i]],], type="class")
+ktest.fs<-as.matrix(train7[,1])[cvfolds[[i]],]
+tree.train7.err.fs[i,1] <- mean((ktest.fs != tree.train7.pred.fs))
+  }
+  tree.train7.err.mean.fs[j,1]<-mean(tree.train7.err.fs[,1])
+}
+
+#Find the maxdepth with the smallest cross-validated misclassification error
+depth<-which.min(tree.train7.err.mean.fs)
+paste("The parameter associated with minimum error is",depth,".")
+paste("The corresponding misclassification error is",tree.train7.err.mean.fs[depth,1],".")
+#display the corresponding results 
+tree.train7.final.fs<-rpart(k ~ x1+x2,
+  	method="class", data=train7,control=rpart.control(maxdepth = depth))
+printcp(tree.train7.final.fs)
+
+# plot the tree.train1 
+plot(tree.train7.final.fs, uniform=TRUE, main="Classification Tree for Train1")
+text(tree.train7.final.fs, use.n=TRUE, all=TRUE, cex=.8)
+```
+
+
+#Train11
+#Dataset 5
+```{r}
+#Simulation of training data
+#Case 1: K=3 classes and p=5 features, p1=2.
+#sigma is set to 1.
+#Covariance matrix is called Sigma.
+##Generate 100 obs for each of the class label.
+#install.packages("MASS")
+library(MASS)
+Sigma5<-sigma5<-matrix(c(1,0,0,0,0,
+0,1,0,0,0,
+0,0,1,0,0,
+0,0,0,1,0,
+0,0,0,0,1),byrow=TRUE,nrow=5)
+mu1<-c(1,2,0,0,0)
+class1_data_11<-mvrnorm(n=100,mu=mu1,Sigma=sigma5)
+mu2<-c(2,3,0,0,0)
+class2_data_11<-mvrnorm(n=100,mu=mu2,Sigma=sigma5)
+mu3<-c(3,4,0,0,0)
+class3_data_11<-mvrnorm(n=100,mu=mu3,Sigma=sigma5)
+#Generate labels
+k<-matrix(c(rep(1,100),rep(2,100),rep(3,100)),nrow=300)
+#Final training data set
+train11<-as.data.frame(cbind(k,rbind(class1_data_11,class2_data_11,class3_data_11)))
+colnames(train11)<-c("k","x1","x2","x3","x4","x5")
+```
+#train 11:without feature selection
+```{r}
+#10-fold cv
+set.seed(25592732)
+cv.folds <- function (n, folds = 10) {split(sample(1:n), rep(1:folds, length = n)) }
+cvfolds<-cv.folds(n=dim(train11)[[1]]) 
+
+#Try our classifier without feature selection for train 1
+#K=3, p=3, p1=2
+#Using package "rpart"
+#install.packages("rpart")
+#The only porameter in tree is depth/tree size min=1,max=30
+library(rpart)
+#Calculate missclassification error for each model (different maxdepth)
+
+tree.train11.err<-matrix(NA,10,1)
+tree.train11.err.mean<-matrix(NA,30,1)
+for (j in 1:30) {
+  for (i in 1:10) {
+tree.train11<-rpart(k ~ x1+x2+x3+x4+x5,
+  	method="class", data=train11[-cvfolds[[i]],],control=rpart.control(maxdepth = j))
+tree.train11.pred = predict(tree.train11, newdata=train11[cvfolds[[i]],], type="class")
+ktest<-as.matrix(train11[,1])[cvfolds[[i]],]
+tree.train11.err[i,1] <- mean((ktest != tree.train11.pred))
+  }
+  tree.train11.err.mean[j,1]<-mean(tree.train11.err[,1])
+}
+
+#Find the maxdepth with the smallest cross-validated misclassification error
+depth<-which.min(tree.train11.err.mean)
+paste("The parameter associated with minimum error is",depth,".")
+paste("The corresponding misclassification error is",tree.train11.err.mean[depth,1],".")
+#display the corresponding results 
+tree.train11.final<-rpart(k ~ x1+x2+x3+x4+x5,
+  	method="class", data=train11,control=rpart.control(maxdepth = depth))
+printcp(tree.train11.final)
+
+
+#visualize the cross-validation results 
+#plotcp(tree.train1) 
+#show detailed summary of splits
+#summary(tree.train1) 
+
+# plot the tree.train1 
+plot(tree.train11.final, uniform=TRUE, main="Classification Tree for Train1")
+text(tree.train11.final, use.n=TRUE, all=TRUE, cex=.8)
+```
+#train 11:with feature selection
+```{r}
+#Calculate the CoV.
+#Should use mean of absolute values; no unifying standard in choosing a cut-off value.
+#cov_train1_x1<-sd(train1[,2])/mean(abs(train1[,2]))
+#cov_train1_x2<-sd(train1[,3])/mean(abs(train1[,3]))
+#cov_train1_x3<-sd(train1[,4])/mean(abs(train1[,4]))
+#cut-off: CoV<1
+cov_train11<-matrix(NA,5,1)
+for(i in 1:5) {
+  cov_train11[i,1]<-sd(train11[,i+1])/mean(abs(train11[,i+1]))
+    if (cov_train11[i,1]<1) {
+    print(paste("The selected variable is x",i,sep = ""))
+  }
+}
+
+#10-fold cv
+set.seed(25592732)
+cv.folds <- function (n, folds = 10) {split(sample(1:n), rep(1:folds, length = n)) }
+cvfolds<-cv.folds(n=dim(train11)[[1]]) 
+
+#Try our classifier with feature selection for train 1
+#x1 is selected
+#K=3, p=3, p1=2
+#Using package "rpart"
+#install.packages("rpart")
+#The only porameter in tree is depth/tree size min=1,max=30
+library(rpart)
+#Calculate missclassification error for each model (different maxdepth)
+
+tree.train11.err.fs<-matrix(NA,10,1)
+tree.train11.err.mean.fs<-matrix(NA,30,1)
+for (j in 1:30) {
+  for (i in 1:10) {
+tree.train11.fs<-rpart(k ~ x1+x2,method="class", data=train11[-cvfolds[[i]],],control=rpart.control(maxdepth = j))
+tree.train11.pred.fs = predict(tree.train11.fs, newdata=train11[cvfolds[[i]],], type="class")
+ktest.fs<-as.matrix(train11[,1])[cvfolds[[i]],]
+tree.train11.err.fs[i,1] <- mean((ktest.fs != tree.train11.pred.fs))
+  }
+  tree.train11.err.mean.fs[j,1]<-mean(tree.train11.err.fs[,1])
+}
+
+#Find the maxdepth with the smallest cross-validated misclassification error
+depth<-which.min(tree.train11.err.mean.fs)
+paste("The parameter associated with minimum error is",depth,".")
+paste("The corresponding misclassification error is",tree.train11.err.mean.fs[depth,1],".")
+#display the corresponding results 
+tree.train11.final.fs<-rpart(k ~ x1+x2,
+  	method="class", data=train11,control=rpart.control(maxdepth = depth))
+printcp(tree.train11.final.fs)
+
+# plot the tree.train1 
+plot(tree.train11.final.fs, uniform=TRUE, main="Classification Tree for Train1")
+text(tree.train11.final.fs, use.n=TRUE, all=TRUE, cex=.8)
+```
+
+
+#Train12 
+#Dataset 6 in the report
+```{r}
+#Simulation of training data
+#Case 1: K=3 classes and p=5 features, p1=3.
+#sigma is set to 1.
+#Covariance matrix is called Sigma.
+##Generate 100 obs for each of the class label.
+#install.packages("MASS")
+library(MASS)
+Sigma5<-sigma5<-matrix(c(1,0,0,0,0,
+0,1,0,0,0,
+0,0,1,0,0,
+0,0,0,1,0,
+0,0,0,0,1),byrow=TRUE,nrow=5)
+mu1_12<-c(1,2,3,0,0)
+class1_data_12<-mvrnorm(n=100,mu=mu1_12,Sigma=sigma5)
+mu2_12<-c(2,3,4,0,0)
+class2_data_12<-mvrnorm(n=100,mu=mu2_12,Sigma=sigma5)
+mu3_12<-c(3,4,5,0,0)
+class3_data_12<-mvrnorm(n=100,mu=mu3_12,Sigma=sigma5)
+#Generate labels
+k<-matrix(c(rep(1,100),rep(2,100),rep(3,100)),nrow=300)
+#Final training data set
+train12<-as.data.frame(cbind(k,rbind(class1_data_12,class2_data_12,class3_data_12)))
+colnames(train12)<-c("k","x1","x2","x3","x4","x5")
+```
+#train 12:without feature selection
+```{r}
+#10-fold cv
+set.seed(25592732)
+cv.folds <- function (n, folds = 10) {split(sample(1:n), rep(1:folds, length = n)) }
+cvfolds<-cv.folds(n=dim(train12)[[1]]) 
+
+#Try our classifier without feature selection for train 1
+#K=3, p=3, p1=2
+#Using package "rpart"
+#install.packages("rpart")
+#The only porameter in tree is depth/tree size min=1,max=30
+library(rpart)
+#Calculate missclassification error for each model (different maxdepth)
+
+tree.train12.err<-matrix(NA,10,1)
+tree.train12.err.mean<-matrix(NA,30,1)
+for (j in 1:30) {
+  for (i in 1:10) {
+tree.train12<-rpart(k ~ x1+x2+x3+x4+x5,
+  	method="class", data=train12[-cvfolds[[i]],],control=rpart.control(maxdepth = j))
+tree.train12.pred = predict(tree.train12, newdata=train12[cvfolds[[i]],], type="class")
+ktest<-as.matrix(train12[,1])[cvfolds[[i]],]
+tree.train12.err[i,1] <- mean((ktest != tree.train12.pred))
+  }
+  tree.train12.err.mean[j,1]<-mean(tree.train12.err[,1])
+}
+
+#Find the maxdepth with the smallest cross-validated misclassification error
+depth<-which.min(tree.train12.err.mean)
+paste("The parameter associated with minimum error is",depth,".")
+paste("The corresponding misclassification error is",tree.train12.err.mean[depth,1],".")
+#display the corresponding results 
+tree.train12.final<-rpart(k ~ x1+x2+x3+x4+x5,
+  	method="class", data=train12,control=rpart.control(maxdepth = depth))
+printcp(tree.train12.final)
+
+
+#visualize the cross-validation results 
+#plotcp(tree.train1) 
+#show detailed summary of splits
+#summary(tree.train1) 
+
+# plot the tree.train1 
+plot(tree.train12.final, uniform=TRUE, main="Classification Tree for Train1")
+text(tree.train12.final, use.n=TRUE, all=TRUE, cex=.8)
+```
+#train 12:with feature selection
+```{r}
+#Calculate the CoV.
+#Should use mean of absolute values; no unifying standard in choosing a cut-off value.
+#cov_train1_x1<-sd(train1[,2])/mean(abs(train1[,2]))
+#cov_train1_x2<-sd(train1[,3])/mean(abs(train1[,3]))
+#cov_train1_x3<-sd(train1[,4])/mean(abs(train1[,4]))
+#cut-off: CoV<1
+cov_train12<-matrix(NA,5,1)
+for(i in 1:5) {
+  cov_train12[i,1]<-sd(train12[,i+1])/mean(abs(train12[,i+1]))
+    if (cov_train12[i,1]<1) {
+    print(paste("The selected variable is x",i,sep = ""))
+  }
+}
+
+#10-fold cv
+set.seed(25592732)
+cv.folds <- function (n, folds = 10) {split(sample(1:n), rep(1:folds, length = n)) }
+cvfolds<-cv.folds(n=dim(train12)[[1]]) 
+
+#Try our classifier with feature selection for train 1
+#x1 is selected
+#K=3, p=3, p1=2
+#Using package "rpart"
+#install.packages("rpart")
+#The only porameter in tree is depth/tree size min=1,max=30
+library(rpart)
+#Calculate missclassification error for each model (different maxdepth)
+
+tree.train12.err.fs<-matrix(NA,10,1)
+tree.train12.err.mean.fs<-matrix(NA,30,1)
+for (j in 1:30) {
+  for (i in 1:10) {
+tree.train12.fs<-rpart(k ~ x1+x2+x3,method="class", data=train12[-cvfolds[[i]],],control=rpart.control(maxdepth = j))
+tree.train12.pred.fs = predict(tree.train12.fs, newdata=train12[cvfolds[[i]],], type="class")
+ktest.fs<-as.matrix(train12[,1])[cvfolds[[i]],]
+tree.train12.err.fs[i,1] <- mean((ktest.fs != tree.train12.pred.fs))
+  }
+  tree.train12.err.mean.fs[j,1]<-mean(tree.train12.err.fs[,1])
+}
+
+#Find the maxdepth with the smallest cross-validated misclassification error
+depth<-which.min(tree.train12.err.mean.fs)
+paste("The parameter associated with minimum error is",depth,".")
+paste("The corresponding misclassification error is",tree.train12.err.mean.fs[depth,1],".")
+#display the corresponding results 
+tree.train12.final.fs<-rpart(k ~ x1+x2+x3,
+  	method="class", data=train12,control=rpart.control(maxdepth = depth))
+printcp(tree.train12.final.fs)
+
+# plot the tree.train1 
+plot(tree.train12.final.fs, uniform=TRUE, main="Classification Tree for Train12")
+text(tree.train12.final.fs, use.n=TRUE, all=TRUE, cex=.8)
+```
+
+
+#Train13 
+#Dataset 7 in the report
+```{r}
+#Simulation of training data
+#Case 1: K=3 classes and p=5 features, p1=4.
+#sigma is set to 1.
+#Covariance matrix is called Sigma.
+##Generate 100 obs for each of the class label.
+#install.packages("MASS")
+library(MASS)
+Sigma5<-sigma5<-matrix(c(1,0,0,0,0,
+0,1,0,0,0,
+0,0,1,0,0,
+0,0,0,1,0,
+0,0,0,0,1),byrow=TRUE,nrow=5)
+mu1_13<-c(1,2,3,4,0)
+class1_data_13<-mvrnorm(n=100,mu=mu1_13,Sigma=sigma5)
+mu2_13<-c(2,3,4,5,0)
+class2_data_13<-mvrnorm(n=100,mu=mu2_13,Sigma=sigma5)
+mu3_13<-c(3,4,5,6,0)
+class3_data_13<-mvrnorm(n=100,mu=mu3_13,Sigma=sigma5)
+#Generate labels
+k<-matrix(c(rep(1,100),rep(2,100),rep(3,100)),nrow=300)
+#Final training data set
+train13<-as.data.frame(cbind(k,rbind(class1_data_13,class2_data_13,class3_data_13)))
+colnames(train13)<-c("k","x1","x2","x3","x4","x5")
+```
+#train 13:without feature selection
+```{r}
+#10-fold cv
+set.seed(25592732)
+cv.folds <- function (n, folds = 10) {split(sample(1:n), rep(1:folds, length = n)) }
+cvfolds<-cv.folds(n=dim(train13)[[1]]) 
+
+#Try our classifier without feature selection for train 1
+#K=3, p=3, p1=2
+#Using package "rpart"
+#install.packages("rpart")
+#The only porameter in tree is depth/tree size min=1,max=30
+library(rpart)
+#Calculate missclassification error for each model (different maxdepth)
+
+tree.train13.err<-matrix(NA,10,1)
+tree.train13.err.mean<-matrix(NA,30,1)
+for (j in 1:30) {
+  for (i in 1:10) {
+tree.train13<-rpart(k ~ x1+x2+x3+x4+x5,
+  	method="class", data=train13[-cvfolds[[i]],],control=rpart.control(maxdepth = j))
+tree.train13.pred = predict(tree.train13, newdata=train13[cvfolds[[i]],], type="class")
+ktest<-as.matrix(train13[,1])[cvfolds[[i]],]
+tree.train13.err[i,1] <- mean((ktest != tree.train13.pred))
+  }
+  tree.train13.err.mean[j,1]<-mean(tree.train13.err[,1])
+}
+
+#Find the maxdepth with the smallest cross-validated misclassification error
+depth<-which.min(tree.train13.err.mean)
+paste("The parameter associated with minimum error is",depth,".")
+paste("The corresponding misclassification error is",tree.train13.err.mean[depth,1],".")
+#display the corresponding results 
+tree.train13.final<-rpart(k ~ x1+x2+x3+x4+x5,
+  	method="class", data=train13,control=rpart.control(maxdepth = depth))
+printcp(tree.train13.final)
+
+
+#visualize the cross-validation results 
+#plotcp(tree.train1) 
+#show detailed summary of splits
+#summary(tree.train1) 
+
+# plot the tree.train1 
+plot(tree.train13.final, uniform=TRUE, main="Classification Tree for Train1")
+text(tree.train13.final, use.n=TRUE, all=TRUE, cex=.8)
+```
+#train 13:with feature selection
+```{r}
+#Calculate the CoV.
+#Should use mean of absolute values; no unifying standard in choosing a cut-off value.
+#cov_train1_x1<-sd(train1[,2])/mean(abs(train1[,2]))
+#cov_train1_x2<-sd(train1[,3])/mean(abs(train1[,3]))
+#cov_train1_x3<-sd(train1[,4])/mean(abs(train1[,4]))
+#cut-off: CoV<1
+cov_train13<-matrix(NA,5,1)
+for(i in 1:5) {
+  cov_train13[i,1]<-sd(train13[,i+1])/mean(abs(train13[,i+1]))
+    if (cov_train13[i,1]<1) {
+    print(paste("The selected variable is x",i,sep = ""))
+  }
+}
+
+#10-fold cv
+set.seed(25592732)
+cv.folds <- function (n, folds = 10) {split(sample(1:n), rep(1:folds, length = n)) }
+cvfolds<-cv.folds(n=dim(train13)[[1]]) 
+
+#Try our classifier with feature selection for train 1
+#x1 is selected
+#K=3, p=3, p1=2
+#Using package "rpart"
+#install.packages("rpart")
+#The only porameter in tree is depth/tree size min=1,max=30
+library(rpart)
+#Calculate missclassification error for each model (different maxdepth)
+
+tree.train13.err.fs<-matrix(NA,10,1)
+tree.train13.err.mean.fs<-matrix(NA,30,1)
+for (j in 1:30) {
+  for (i in 1:10) {
+tree.train13.fs<-rpart(k ~ x1+x2+x3+x4,method="class", data=train13[-cvfolds[[i]],],control=rpart.control(maxdepth = j))
+tree.train13.pred.fs = predict(tree.train13.fs, newdata=train13[cvfolds[[i]],], type="class")
+ktest.fs<-as.matrix(train13[,1])[cvfolds[[i]],]
+tree.train13.err.fs[i,1] <- mean((ktest.fs != tree.train13.pred.fs))
+  }
+  tree.train13.err.mean.fs[j,1]<-mean(tree.train13.err.fs[,1])
+}
+
+#Find the maxdepth with the smallest cross-validated misclassification error
+depth<-which.min(tree.train13.err.mean.fs)
+paste("The parameter associated with minimum error is",depth,".")
+paste("The corresponding misclassification error is",tree.train13.err.mean.fs[depth,1],".")
+#display the corresponding results 
+tree.train13.final.fs<-rpart(k ~ x1+x2+x3+x4,
+  	method="class", data=train13,control=rpart.control(maxdepth = depth))
+printcp(tree.train13.final.fs)
+
+# plot the tree.train1 
+plot(tree.train13.final.fs, uniform=TRUE, main="Classification Tree for Train12")
+text(tree.train13.final.fs, use.n=TRUE, all=TRUE, cex=.8)
+```
+
+
+#Train14
+#Dataset 8 in the report
+```{r}
+#Simulation of training data
+#Case 1: K=3 classes and p=3 features, p1=2.
+#sigma is set to 1.
+#Covairance matrix is called Sigma.
+##Generate 150 obs for each of the class label.
+#install.packages("MASS")
+library(MASS)
+Sigma<-sigma<-matrix(c(1,0,0,
+0,1,0,
+0,0,1),byrow=TRUE,nrow=3)
+mu1<-c(1,2,0)
+class1_data_14<-mvrnorm(n=150,mu=mu1,Sigma=Sigma)
+mu2<-c(2,3,0)
+class2_data_14<-mvrnorm(n=150,mu=mu2,Sigma=Sigma)
+mu3<-c(3,4,0)
+class3_data_14<-mvrnorm(n=150,mu=mu3,Sigma=Sigma)
+#Generate labels
+k<-matrix(c(rep(1,150),rep(2,150),rep(3,150)),nrow=450)
+#Final training data set
+train14<-as.data.frame(cbind(k,rbind(class1_data_14,class2_data_14,class3_data_14)))
+colnames(train14)<-c("k","x1","x2","x3")
+```
+#train 14:without feature selection
+```{r}
+#10-fold cv
+set.seed(25592732)
+cv.folds <- function (n, folds = 10) {split(sample(1:n), rep(1:folds, length = n)) }
+cvfolds<-cv.folds(n=dim(train14)[[1]]) 
+
+#Try our classifier without feature selection for train 1
+#K=3, p=3, p1=2
+#Using package "rpart"
+#install.packages("rpart")
+#The only porameter in tree is depth/tree size min=1,max=30
+library(rpart)
+#Calculate missclassification error for each model (different maxdepth)
+
+tree.train14.err<-matrix(NA,10,1)
+tree.train14.err.mean<-matrix(NA,30,1)
+for (j in 1:30) {
+  for (i in 1:10) {
+tree.train14<-rpart(k ~ x1+x2+x3,
+  	method="class", data=train14[-cvfolds[[i]],],control=rpart.control(maxdepth = j))
+tree.train14.pred = predict(tree.train14, newdata=train14[cvfolds[[i]],], type="class")
+ktest<-as.matrix(train14[,1])[cvfolds[[i]],]
+tree.train14.err[i,1] <- mean((ktest != tree.train14.pred))
+  }
+  tree.train14.err.mean[j,1]<-mean(tree.train14.err[,1])
+}
+
+#Find the maxdepth with the smallest cross-validated misclassification error
+depth<-which.min(tree.train14.err.mean)
+paste("The parameter associated with minimum error is",depth,".")
+paste("The corresponding misclassification error is",tree.train14.err.mean[depth,1],".")
+#display the corresponding results 
+tree.train14.final<-rpart(k ~ x1+x2+x3,
+  	method="class", data=train14,control=rpart.control(maxdepth = depth))
+printcp(tree.train14.final)
+
+
+#visualize the cross-validation results 
+#plotcp(tree.train1) 
+#show detailed summary of splits
+#summary(tree.train1) 
+
+# plot the tree.train1 
+plot(tree.train14.final, uniform=TRUE, main="Classification Tree for Train1")
+text(tree.train14.final, use.n=TRUE, all=TRUE, cex=.8)
+```
+#train 14:with feature selection
+```{r}
+#Calculate the CoV.
+#Should use mean of absolute values; no unifying standard in choosing a cut-off value.
+#cov_train1_x1<-sd(train1[,2])/mean(abs(train1[,2]))
+#cov_train1_x2<-sd(train1[,3])/mean(abs(train1[,3]))
+#cov_train1_x3<-sd(train1[,4])/mean(abs(train1[,4]))
+#cut-off: CoV<1
+cov_train14<-matrix(NA,3,1)
+for(i in 1:3) {
+  cov_train14[i,1]<-sd(train14[,i+1])/mean(abs(train14[,i+1]))
+    if (cov_train14[i,1]<1) {
+    print(paste("The selected variable is x",i,sep = ""))
+  }
+}
+
+#10-fold cv
+set.seed(25592732)
+cv.folds <- function (n, folds = 10) {split(sample(1:n), rep(1:folds, length = n)) }
+cvfolds<-cv.folds(n=dim(train14)[[1]]) 
+
+#Try our classifier with feature selection for train 1
+#x1 is selected
+#K=3, p=3, p1=2
+#Using package "rpart"
+#install.packages("rpart")
+#The only porameter in tree is depth/tree size min=1,max=30
+library(rpart)
+#Calculate missclassification error for each model (different maxdepth)
+
+tree.train14.err.fs<-matrix(NA,10,1)
+tree.train14.err.mean.fs<-matrix(NA,30,1)
+for (j in 1:30) {
+  for (i in 1:10) {
+tree.train14.fs<-rpart(k ~ x1+x2,method="class", data=train14[-cvfolds[[i]],],control=rpart.control(maxdepth = j))
+tree.train14.pred.fs = predict(tree.train14.fs, newdata=train14[cvfolds[[i]],], type="class")
+ktest.fs<-as.matrix(train14[,1])[cvfolds[[i]],]
+tree.train14.err.fs[i,1] <- mean((ktest.fs != tree.train14.pred.fs))
+  }
+  tree.train14.err.mean.fs[j,1]<-mean(tree.train14.err.fs[,1])
+}
+
+#Find the maxdepth with the smallest cross-validated misclassification error
+depth<-which.min(tree.train14.err.mean.fs)
+paste("The parameter associated with minimum error is",depth,".")
+paste("The corresponding misclassification error is",tree.train14.err.mean.fs[depth,1],".")
+#display the corresponding results 
+tree.train14.final.fs<-rpart(k ~ x1+x2,
+  	method="class", data=train14,control=rpart.control(maxdepth = depth))
+printcp(tree.train14.final.fs)
+
+# plot the tree.train1 
+plot(tree.train14.final.fs, uniform=TRUE, main="Classification Tree for Train1")
+text(tree.train14.final.fs, use.n=TRUE, all=TRUE, cex=.8)
+```
+
+#Train8
+#Dataset 9
+```{r}
+#Simulation of training data
+#Case 1: K=3 classes and p=3 features, p1=2.
+#sigma is set to 1.
+#Covairance matrix is called Sigma.
+##Generate 200 obs for each of the class label.
+#install.packages("MASS")
+library(MASS)
+Sigma<-sigma<-matrix(c(1,0,0,
+0,1,0,
+0,0,1),byrow=TRUE,nrow=3)
+mu1<-c(1,2,0)
+class1_data<-mvrnorm(n=200,mu=mu1,Sigma=Sigma)
+mu2<-c(2,3,0)
+class2_data<-mvrnorm(n=200,mu=mu2,Sigma=Sigma)
+mu3<-c(3,4,0)
+class3_data<-mvrnorm(n=200,mu=mu3,Sigma=Sigma)
+#Generate labels
+k<-matrix(c(rep(1,200),rep(2,200),rep(3,200)),nrow=600)
+#Final training data set
+train8<-as.data.frame(cbind(k,rbind(class1_data,class2_data,class3_data)))
+colnames(train8)<-c("k","x1","x2","x3")
+```
+#train 8:without feature selection
+```{r}
+#10-fold cv
+set.seed(25592732)
+cv.folds <- function (n, folds = 10) {split(sample(1:n), rep(1:folds, length = n)) }
+cvfolds<-cv.folds(n=dim(train8)[[1]]) 
+
+#Try our classifier without feature selection for train 1
+#K=3, p=3, p1=2
+#Using package "rpart"
+#install.packages("rpart")
+#The only porameter in tree is depth/tree size min=1,max=30
+library(rpart)
+#Calculate missclassification error for each model (different maxdepth)
+
+tree.train8.err<-matrix(NA,10,1)
+tree.train8.err.mean<-matrix(NA,30,1)
+for (j in 1:30) {
+  for (i in 1:10) {
+tree.train8<-rpart(k ~ x1+x2+x3,
+  	method="class", data=train8[-cvfolds[[i]],],control=rpart.control(maxdepth = j))
+tree.train8.pred = predict(tree.train8, newdata=train8[cvfolds[[i]],], type="class")
+ktest<-as.matrix(train8[,1])[cvfolds[[i]],]
+tree.train8.err[i,1] <- mean((ktest != tree.train8.pred))
+  }
+  tree.train8.err.mean[j,1]<-mean(tree.train8.err[,1])
+}
+
+#Find the maxdepth with the smallest cross-validated misclassification error
+depth<-which.min(tree.train8.err.mean)
+paste("The parameter associated with minimum error is",depth,".")
+paste("The corresponding misclassification error is",tree.train8.err.mean[depth,1],".")
+#display the corresponding results 
+tree.train8.final<-rpart(k ~ x1+x2+x3,
+  	method="class", data=train8,control=rpart.control(maxdepth = depth))
+printcp(tree.train8.final)
+
+
+#visualize the cross-validation results 
+#plotcp(tree.train1) 
+#show detailed summary of splits
+#summary(tree.train1) 
+
+# plot the tree.train1 
+plot(tree.train8.final, uniform=TRUE, main="Classification Tree for Train1")
+text(tree.train8.final, use.n=TRUE, all=TRUE, cex=.8)
+```
+#train 8:with feature selection
+```{r}
+#Calculate the CoV.
+#Should use mean of absolute values; no unifying standard in choosing a cut-off value.
+#cov_train1_x1<-sd(train1[,2])/mean(abs(train1[,2]))
+#cov_train1_x2<-sd(train1[,3])/mean(abs(train1[,3]))
+#cov_train1_x3<-sd(train1[,4])/mean(abs(train1[,4]))
+#cut-off: CoV<1
+cov_train8<-matrix(NA,3,1)
+for(i in 1:3) {
+  cov_train8[i,1]<-sd(train8[,i+1])/mean(abs(train8[,i+1]))
+    if (cov_train8[i,1]<1) {
+    print(paste("The selected variable is x",i,sep = ""))
+  }
+}
+
+#10-fold cv
+set.seed(25592732)
+cv.folds <- function (n, folds = 10) {split(sample(1:n), rep(1:folds, length = n)) }
+cvfolds<-cv.folds(n=dim(train8)[[1]]) 
+
+#Try our classifier with feature selection for train 1
+#x1 is selected
+#K=3, p=3, p1=2
+#Using package "rpart"
+#install.packages("rpart")
+#The only porameter in tree is depth/tree size min=1,max=30
+library(rpart)
+#Calculate missclassification error for each model (different maxdepth)
+
+tree.train8.err.fs<-matrix(NA,10,1)
+tree.train8.err.mean.fs<-matrix(NA,30,1)
+for (j in 1:30) {
+  for (i in 1:10) {
+tree.train8.fs<-rpart(k ~ x1+x2,method="class", data=train8[-cvfolds[[i]],],control=rpart.control(maxdepth = j))
+tree.train8.pred.fs = predict(tree.train8.fs, newdata=train8[cvfolds[[i]],], type="class")
+ktest.fs<-as.matrix(train8[,1])[cvfolds[[i]],]
+tree.train8.err.fs[i,1] <- mean((ktest.fs != tree.train8.pred.fs))
+  }
+  tree.train8.err.mean.fs[j,1]<-mean(tree.train8.err.fs[,1])
+}
+
+#Find the maxdepth with the smallest cross-validated misclassification error
+depth<-which.min(tree.train8.err.mean.fs)
+paste("The parameter associated with minimum error is",depth,".")
+paste("The corresponding misclassification error is",tree.train8.err.mean.fs[depth,1],".")
+#display the corresponding results 
+tree.train8.final.fs<-rpart(k ~ x1+x2,
+  	method="class", data=train8,control=rpart.control(maxdepth = depth))
+printcp(tree.train8.final.fs)
+
+# plot the tree.train1 
+plot(tree.train8.final.fs, uniform=TRUE, main="Classification Tree for Train1")
+text(tree.train8.final.fs, use.n=TRUE, all=TRUE, cex=.8)
+```
+
+
+#Train9 
+#Dataset 10
+```{r}
+#Simulation of training data
+#Case 1: K=3 classes and p=3 features, p1=2.
+#sigma is set to 1.
+#Covairance matrix is called Sigma.
+##Generate 500 obs for each of the class label.
+#install.packages("MASS")
+library(MASS)
+Sigma<-sigma<-matrix(c(1,0,0,
+0,1,0,
+0,0,1),byrow=TRUE,nrow=3)
+mu1<-c(1,2,0)
+class1_data<-mvrnorm(n=500,mu=mu1,Sigma=Sigma)
+mu2<-c(2,3,0)
+class2_data<-mvrnorm(n=500,mu=mu2,Sigma=Sigma)
+mu3<-c(3,4,0)
+class3_data<-mvrnorm(n=500,mu=mu3,Sigma=Sigma)
+#Generate labels
+k<-matrix(c(rep(1,500),rep(2,500),rep(3,500)),nrow=1500)
+#Final training data set
+train9<-as.data.frame(cbind(k,rbind(class1_data,class2_data,class3_data)))
+colnames(train9)<-c("k","x1","x2","x3")
+```
+#train 9:without feature selection
+```{r}
+#10-fold cv
+set.seed(25592732)
+cv.folds <- function (n, folds = 10) {split(sample(1:n), rep(1:folds, length = n)) }
+cvfolds<-cv.folds(n=dim(train9)[[1]]) 
+
+#Try our classifier without feature selection for train 1
+#K=3, p=3, p1=2
+#Using package "rpart"
+#install.packages("rpart")
+#The only porameter in tree is depth/tree size min=1,max=30
+library(rpart)
+#Calculate missclassification error for each model (different maxdepth)
+
+tree.train9.err<-matrix(NA,10,1)
+tree.train9.err.mean<-matrix(NA,30,1)
+for (j in 1:30) {
+  for (i in 1:10) {
+tree.train9<-rpart(k ~ x1+x2+x3,
+  	method="class", data=train9[-cvfolds[[i]],],control=rpart.control(maxdepth = j))
+tree.train9.pred = predict(tree.train9, newdata=train9[cvfolds[[i]],], type="class")
+ktest<-as.matrix(train9[,1])[cvfolds[[i]],]
+tree.train9.err[i,1] <- mean((ktest != tree.train9.pred))
+  }
+  tree.train9.err.mean[j,1]<-mean(tree.train9.err[,1])
+}
+
+#Find the maxdepth with the smallest cross-validated misclassification error
+depth<-which.min(tree.train9.err.mean)
+paste("The parameter associated with minimum error is",depth,".")
+paste("The corresponding misclassification error is",tree.train9.err.mean[depth,1],".")
+#display the corresponding results 
+tree.train9.final<-rpart(k ~ x1+x2+x3,
+  	method="class", data=train9,control=rpart.control(maxdepth = depth))
+printcp(tree.train9.final)
+
+
+#visualize the cross-validation results 
+#plotcp(tree.train1) 
+#show detailed summary of splits
+#summary(tree.train1) 
+
+# plot the tree.train1 
+plot(tree.train9.final, uniform=TRUE, main="Classification Tree for Train1")
+text(tree.train9.final, use.n=TRUE, all=TRUE, cex=.8)
+```
+#train 9:with feature selection
+```{r}
+#Calculate the CoV.
+#Should use mean of absolute values; no unifying standard in choosing a cut-off value.
+#cov_train1_x1<-sd(train1[,2])/mean(abs(train1[,2]))
+#cov_train1_x2<-sd(train1[,3])/mean(abs(train1[,3]))
+#cov_train1_x3<-sd(train1[,4])/mean(abs(train1[,4]))
+#cut-off: CoV<1
+cov_train9<-matrix(NA,3,1)
+for(i in 1:3) {
+  cov_train9[i,1]<-sd(train9[,i+1])/mean(abs(train9[,i+1]))
+    if (cov_train9[i,1]<1) {
+    print(paste("The selected variable is x",i,sep = ""))
+  }
+}
+
+#10-fold cv
+set.seed(25592732)
+cv.folds <- function (n, folds = 10) {split(sample(1:n), rep(1:folds, length = n)) }
+cvfolds<-cv.folds(n=dim(train9)[[1]]) 
+
+#Try our classifier with feature selection for train 1
+#x1 is selected
+#K=3, p=3, p1=2
+#Using package "rpart"
+#install.packages("rpart")
+#The only porameter in tree is depth/tree size min=1,max=30
+library(rpart)
+#Calculate missclassification error for each model (different maxdepth)
+
+tree.train9.err.fs<-matrix(NA,10,1)
+tree.train9.err.mean.fs<-matrix(NA,30,1)
+for (j in 1:30) {
+  for (i in 1:10) {
+tree.train9.fs<-rpart(k ~ x1+x2,method="class", data=train9[-cvfolds[[i]],],control=rpart.control(maxdepth = j))
+tree.train9.pred.fs = predict(tree.train9.fs, newdata=train9[cvfolds[[i]],], type="class")
+ktest.fs<-as.matrix(train9[,1])[cvfolds[[i]],]
+tree.train9.err.fs[i,1] <- mean((ktest.fs != tree.train9.pred.fs))
+  }
+  tree.train9.err.mean.fs[j,1]<-mean(tree.train9.err.fs[,1])
+}
+
+#Find the maxdepth with the smallest cross-validated misclassification error
+depth<-which.min(tree.train9.err.mean.fs)
+paste("The parameter associated with minimum error is",depth,".")
+paste("The corresponding misclassification error is",tree.train9.err.mean.fs[depth,1],".")
+#display the corresponding results 
+tree.train9.final.fs<-rpart(k ~ x1+x2,
+  	method="class", data=train9,control=rpart.control(maxdepth = depth))
+printcp(tree.train9.final.fs)
+
+# plot the tree.train1 
+plot(tree.train9.final.fs, uniform=TRUE, main="Classification Tree for Train1")
+text(tree.train9.final.fs, use.n=TRUE, all=TRUE, cex=.8)
+```
+
+
+#Different feature selection method
+##Dataset used is dataset 7
+#Scen1
+```{r}
+#Calculate the CoV.
+#Should use mean of absolute values; no unifying standard in choosing a cut-off value.
+cov_train13_x1<-sd(train13[,2])/mean(abs(train13[,2]))
+cov_train13_x2<-sd(train13[,3])/mean(abs(train13[,3]))
+cov_train13_x3<-sd(train13[,4])/mean(abs(train13[,4]))
+cov_train13_x4<-sd(train13[,5])/mean(abs(train13[,5]))
+cov_train13_x5<-sd(train13[,6])/mean(abs(train13[,6]))
+cov_train13_x1
+cov_train13_x2
+cov_train13_x3
+cov_train13_x4
+cov_train13_x5
+#cut-off: Cov>0.25
+#all x1-x4 selected
+cov_train13<-matrix(NA,5,1)
+for(i in 1:5) {
+  cov_train13[i,1]<-sd(train13[,i+1])/mean(abs(train13[,i+1]))
+    if (cov_train13[i,1]<1) {
+    print(paste("The selected variable is x",i,sep = ""))
+  }
+}
+
+#10-fold cv
+set.seed(25592732)
+cv.folds <- function (n, folds = 10) {split(sample(1:n), rep(1:folds, length = n)) }
+cvfolds<-cv.folds(n=dim(train13)[[1]]) 
+
+#Try our classifier with feature selection for train 1
+#x1 is selected
+#K=3, p=3, p1=2
+#Using package "rpart"
+#install.packages("rpart")
+#The only porameter in tree is depth/tree size min=1,max=30
+library(rpart)
+#Calculate missclassification error for each model (different maxdepth)
+
+tree.train13.err.fs<-matrix(NA,10,1)
+tree.train13.err.mean.fs<-matrix(NA,30,1)
+for (j in 1:30) {
+  for (i in 1:10) {
+tree.train13.fs<-rpart(k ~ x1+x2+x3+x4,method="class", data=train13[-cvfolds[[i]],],control=rpart.control(maxdepth = j))
+tree.train13.pred.fs = predict(tree.train13.fs, newdata=train13[cvfolds[[i]],], type="class")
+ktest.fs<-as.matrix(train13[,1])[cvfolds[[i]],]
+tree.train13.err.fs[i,1] <- mean((ktest.fs != tree.train13.pred.fs))
+  }
+  tree.train13.err.mean.fs[j,1]<-mean(tree.train13.err.fs[,1])
+}
+
+#Find the maxdepth with the smallest cross-validated misclassification error
+depth<-which.min(tree.train13.err.mean.fs)
+paste("The parameter associated with minimum error is",depth,".")
+paste("The corresponding misclassification error is",tree.train13.err.mean.fs[depth,1],".")
+#display the corresponding results 
+tree.train13.final.fs<-rpart(k ~ x1+x2+x3+x4,
+  	method="class", data=train13,control=rpart.control(maxdepth = depth))
+printcp(tree.train13.final.fs)
+
+# plot the tree.train1 
+plot(tree.train13.final.fs, uniform=TRUE, main="Classification Tree for Train12")
+text(tree.train13.final.fs, use.n=TRUE, all=TRUE, cex=.8)
+```
+
+
+#Different feature selection method
+#Scen2
+```{r}
+#Calculate the CoV.
+#Should use mean of absolute values; no unifying standard in choosing a cut-off value.
+cov_train13_x1<-sd(train13[,2])/mean(abs(train13[,2]))
+cov_train13_x2<-sd(train13[,3])/mean(abs(train13[,3]))
+cov_train13_x3<-sd(train13[,4])/mean(abs(train13[,4]))
+cov_train13_x4<-sd(train13[,5])/mean(abs(train13[,5]))
+cov_train13_x5<-sd(train13[,6])/mean(abs(train13[,6]))
+cov_train13_x1
+cov_train13_x2
+cov_train13_x3
+cov_train13_x4
+cov_train13_x5
+#cut-off: Cov>0.29
+# x1-x3 selected
+cov_train13<-matrix(NA,5,1)
+for(i in 1:5) {
+  cov_train13[i,1]<-sd(train13[,i+1])/mean(abs(train13[,i+1]))
+    if (cov_train13[i,1]<1 & cov_train13[i,1]>0.29) {
+    print(paste("The selected variable is x",i,sep = ""))
+  }
+}
+
+#10-fold cv
+set.seed(25592732)
+cv.folds <- function (n, folds = 10) {split(sample(1:n), rep(1:folds, length = n)) }
+cvfolds<-cv.folds(n=dim(train13)[[1]]) 
+
+#Try our classifier with feature selection for train 1
+#x1 is selected
+#K=3, p=3, p1=2
+#Using package "rpart"
+#install.packages("rpart")
+#The only porameter in tree is depth/tree size min=1,max=30
+library(rpart)
+#Calculate missclassification error for each model (different maxdepth)
+
+tree.train13.err.fs<-matrix(NA,10,1)
+tree.train13.err.mean.fs<-matrix(NA,30,1)
+for (j in 1:30) {
+  for (i in 1:10) {
+tree.train13.fs<-rpart(k ~ x1+x2+x3,method="class", data=train13[-cvfolds[[i]],],control=rpart.control(maxdepth = j))
+tree.train13.pred.fs = predict(tree.train13.fs, newdata=train13[cvfolds[[i]],], type="class")
+ktest.fs<-as.matrix(train13[,1])[cvfolds[[i]],]
+tree.train13.err.fs[i,1] <- mean((ktest.fs != tree.train13.pred.fs))
+  }
+  tree.train13.err.mean.fs[j,1]<-mean(tree.train13.err.fs[,1])
+}
+
+#Find the maxdepth with the smallest cross-validated misclassification error
+depth<-which.min(tree.train13.err.mean.fs)
+paste("The parameter associated with minimum error is",depth,".")
+paste("The corresponding misclassification error is",tree.train13.err.mean.fs[depth,1],".")
+#display the corresponding results 
+tree.train13.final.fs<-rpart(k ~ x1+x2+x3,
+  	method="class", data=train13,control=rpart.control(maxdepth = depth))
+printcp(tree.train13.final.fs)
+
+# plot the tree.train1 
+plot(tree.train13.final.fs, uniform=TRUE, main="Classification Tree for Train12")
+text(tree.train13.final.fs, use.n=TRUE, all=TRUE, cex=.8)
+```
+
+
+#Different feature selection method
+#Scen3
+```{r}
+#Calculate the CoV.
+#Should use mean of absolute values; no unifying standard in choosing a cut-off value.
+cov_train13_x1<-sd(train13[,2])/mean(abs(train13[,2]))
+cov_train13_x2<-sd(train13[,3])/mean(abs(train13[,3]))
+cov_train13_x3<-sd(train13[,4])/mean(abs(train13[,4]))
+cov_train13_x4<-sd(train13[,5])/mean(abs(train13[,5]))
+cov_train13_x5<-sd(train13[,6])/mean(abs(train13[,6]))
+#cov_train13_x1
+#cov_train13_x2
+#cov_train13_x3
+#cov_train13_x4
+#cov_train13_x5
+#cut-off: Cov>0.42
+# x1-x2 selected
+cov_train13<-matrix(NA,5,1)
+for(i in 1:5) {
+  cov_train13[i,1]<-sd(train13[,i+1])/mean(abs(train13[,i+1]))
+    if (cov_train13[i,1]<1 & cov_train13[i,1]>0.42) {
+    print(paste("The selected variable is x",i,sep = ""))
+  }
+}
+
+#10-fold cv
+set.seed(25592732)
+cv.folds <- function (n, folds = 10) {split(sample(1:n), rep(1:folds, length = n)) }
+cvfolds<-cv.folds(n=dim(train13)[[1]]) 
+
+#Try our classifier with feature selection for train 1
+#x1 is selected
+#K=3, p=3, p1=2
+#Using package "rpart"
+#install.packages("rpart")
+#The only porameter in tree is depth/tree size min=1,max=30
+library(rpart)
+#Calculate missclassification error for each model (different maxdepth)
+
+tree.train13.err.fs<-matrix(NA,10,1)
+tree.train13.err.mean.fs<-matrix(NA,30,1)
+for (j in 1:30) {
+  for (i in 1:10) {
+tree.train13.fs<-rpart(k ~ x1+x2,
+                       method="class", data=train13[-cvfolds[[i]],],control=rpart.control(maxdepth = j))
+tree.train13.pred.fs = predict(tree.train13.fs, newdata=train13[cvfolds[[i]],], type="class")
+ktest.fs<-as.matrix(train13[,1])[cvfolds[[i]],]
+tree.train13.err.fs[i,1] <- mean((ktest.fs != tree.train13.pred.fs))
+  }
+  tree.train13.err.mean.fs[j,1]<-mean(tree.train13.err.fs[,1])
+}
+
+#Find the maxdepth with the smallest cross-validated misclassification error
+depth<-which.min(tree.train13.err.mean.fs)
+paste("The parameter associated with minimum error is",depth,".")
+paste("The corresponding misclassification error is",tree.train13.err.mean.fs[depth,1],".")
+#display the corresponding results 
+tree.train13.final.fs<-rpart(k ~ x1+x2,
+  	method="class", data=train13,control=rpart.control(maxdepth = depth))
+printcp(tree.train13.final.fs)
+
+# plot the tree.train1 
+plot(tree.train13.final.fs, uniform=TRUE, main="Classification Tree for Train12")
+text(tree.train13.final.fs, use.n=TRUE, all=TRUE, cex=.8)
+```
+
+#Different feature selection method
+#Scen4
+```{r}
+#Calculate the CoV.
+#Should use mean of absolute values; no unifying standard in choosing a cut-off value.
+cov_train13_x1<-sd(train13[,2])/mean(abs(train13[,2]))
+cov_train13_x2<-sd(train13[,3])/mean(abs(train13[,3]))
+cov_train13_x3<-sd(train13[,4])/mean(abs(train13[,4]))
+cov_train13_x4<-sd(train13[,5])/mean(abs(train13[,5]))
+cov_train13_x5<-sd(train13[,6])/mean(abs(train13[,6]))
+#cov_train13_x1
+#cov_train13_x2
+#cov_train13_x3
+#cov_train13_x4
+#cov_train13_x5
+#cut-off: Cov>0.6
+# x1-x2 selected
+cov_train13<-matrix(NA,5,1)
+for(i in 1:5) {
+  cov_train13[i,1]<-sd(train13[,i+1])/mean(abs(train13[,i+1]))
+    if (cov_train13[i,1]<1 & cov_train13[i,1]>0.6) {
+    print(paste("The selected variable is x",i,sep = ""))
+  }
+}
+
+#10-fold cv
+set.seed(25592732)
+cv.folds <- function (n, folds = 10) {split(sample(1:n), rep(1:folds, length = n)) }
+cvfolds<-cv.folds(n=dim(train13)[[1]]) 
+
+#Try our classifier with feature selection for train 1
+#x1 is selected
+#K=3, p=3, p1=2
+#Using package "rpart"
+#install.packages("rpart")
+#The only porameter in tree is depth/tree size min=1,max=30
+library(rpart)
+#Calculate missclassification error for each model (different maxdepth)
+
+tree.train13.err.fs<-matrix(NA,10,1)
+tree.train13.err.mean.fs<-matrix(NA,30,1)
+for (j in 1:30) {
+  for (i in 1:10) {
+tree.train13.fs<-rpart(k ~ x1,method="class", data=train13[-cvfolds[[i]],],control=rpart.control(maxdepth = j))
+tree.train13.pred.fs = predict(tree.train13.fs, newdata=train13[cvfolds[[i]],], type="class")
+ktest.fs<-as.matrix(train13[,1])[cvfolds[[i]],]
+tree.train13.err.fs[i,1] <- mean((ktest.fs != tree.train13.pred.fs))
+  }
+  tree.train13.err.mean.fs[j,1]<-mean(tree.train13.err.fs[,1])
+}
+
+#Find the maxdepth with the smallest cross-validated misclassification error
+depth<-which.min(tree.train13.err.mean.fs)
+paste("The parameter associated with minimum error is",depth,".")
+paste("The corresponding misclassification error is",tree.train13.err.mean.fs[depth,1],".")
+#display the corresponding results 
+tree.train13.final.fs<-rpart(k ~ x1,
+  	method="class", data=train13,control=rpart.control(maxdepth = depth))
+printcp(tree.train13.final.fs)
+
+# plot the tree.train1 
+plot(tree.train13.final.fs, uniform=TRUE, main="Classification Tree for Train12")
+text(tree.train13.final.fs, use.n=TRUE, all=TRUE, cex=.8)
+```
+
+
+
+
+
+#Comparing same sample size n, but different class labels K.
+#Not used in the report
+#Train10
+```{r}
+#Simulation of training data
+#different K
+#Case 10: K=5 classes and p=3 features, p1=2.
+#sigma is set to 1.
+#Covairance matrix is called Sigma.
+##Generate 60 obs for each of the class label.
+#total sample size fixed to 300
+#install.packages("MASS")
+library(MASS)
+Sigma<-sigma<-matrix(c(1,0,0,
+0,1,0,
+0,0,1),byrow=TRUE,nrow=3)
+mu1_10<-c(1,2,0)
+class1_data_10<-mvrnorm(n=60,mu=mu1_10,Sigma=Sigma)
+mu2_10<-c(2,3,0)
+class2_data_10<-mvrnorm(n=60,mu=mu2_10,Sigma=Sigma)
+mu3_10<-c(3,4,0)
+class3_data_10<-mvrnorm(n=60,mu=mu3_10,Sigma=Sigma)
+mu4_10<-c(4,5,0)
+class4_data_10<-mvrnorm(n=60,mu=mu4_10,Sigma=Sigma)
+mu5_10<-c(5,6,0)
+class5_data_10<-mvrnorm(n=60,mu=mu5_10,Sigma=Sigma)
+#Generate labels
+k<-matrix(c(rep(1,60),rep(2,60),rep(3,60),rep(4,60),rep(5,60)), nrow=300)
+#Final training data set
+train10<-as.data.frame(cbind(k,rbind(class1_data_10,class2_data_10,class3_data_10,class4_data_10,class5_data_10)))
+colnames(train10)<-c("k","x1","x2","x3")
+```
+
+
+#Train10 without feature selection
+```{r}
+#10-fold cv
+set.seed(25592732)
+cv.folds <- function (n, folds = 10) {split(sample(1:n), rep(1:folds, length = n)) }
+cvfolds<-cv.folds(n=dim(train10)[[1]]) 
+
+#Try our classifier without feature selection for train 1
+#K=3, p=3, p1=2
+#Using package "rpart"
+#install.packages("rpart")
+#The only porameter in tree is depth/tree size min=1,max=30
+library(rpart)
+#Calculate missclassification error for each model (different maxdepth)
+
+tree.train10.err<-matrix(NA,10,1)
+tree.train10.err.mean<-matrix(NA,30,1)
+for (j in 1:30) {
+  for (i in 1:10) {
+tree.train10<-rpart(k ~ x1+x2+x3,
+  	method="class", data=train10[-cvfolds[[i]],],control=rpart.control(maxdepth = j))
+tree.train10.pred = predict(tree.train10, newdata=train10[cvfolds[[i]],], type="class")
+ktest<-as.matrix(train10[,1])[cvfolds[[i]],]
+tree.train10.err[i,1] <- mean((ktest != tree.train10.pred))
+  }
+  tree.train10.err.mean[j,1]<-mean(tree.train10.err[,1])
+}
+
+#Find the maxdepth with the smallest cross-validated misclassification error
+depth<-which.min(tree.train10.err.mean)
+paste("The parameter associated with minimum error is",depth,".")
+paste("The corresponding misclassification error is",tree.train10.err.mean[depth,1],".")
+#display the corresponding results 
+tree.train10.final<-rpart(k ~ x1+x2+x3,
+  	method="class", data=train10,control=rpart.control(maxdepth = depth))
+printcp(tree.train10.final)
+
+
+#visualize the cross-validation results 
+#plotcp(tree.train1) 
+#show detailed summary of splits
+#summary(tree.train1) 
+
+# plot the tree.train1 
+plot(tree.train10.final, uniform=TRUE, main="Classification Tree for Train1")
+text(tree.train10.final, use.n=TRUE, all=TRUE, cex=.8)
+```
+
+
+#train 10:with feature selection
+```{r}
+#Calculate the CoV.
+#Should use mean of absolute values; no unifying standard in choosing a cut-off value.
+#cov_train10_x1<-sd(train10[,2])/mean(abs(train10[,2]))
+#cov_train10_x2<-sd(train10[,3])/mean(abs(train10[,3]))
+#cov_train10_x3<-sd(train10[,4])/mean(abs(train10[,4]))
+#cut-off: CoV<1
+cov_train10<-matrix(NA,3,1)
+for(i in 1:3) {
+  cov_train10[i,1]<-sd(train10[,i+1])/mean(abs(train10[,i+1]))
+    if (cov_train10[i,1]<1) {
+    print(paste("The selected variable is x",i,sep = ""))
+  }
+}
+
+#10-fold cv
+set.seed(25592732)
+cv.folds <- function (n, folds = 10) {split(sample(1:n), rep(1:folds, length = n)) }
+cvfolds<-cv.folds(n=dim(train10)[[1]]) 
+
+#Try our classifier with feature selection for train 1
+#x1 is selected
+#K=3, p=3, p1=2
+#Using package "rpart"
+#install.packages("rpart")
+#The only porameter in tree is depth/tree size min=1,max=30
+library(rpart)
+#Calculate missclassification error for each model (different maxdepth)
+
+tree.train10.err.fs<-matrix(NA,10,1)
+tree.train10.err.mean.fs<-matrix(NA,30,1)
+for (j in 1:30) {
+  for (i in 1:10) {
+tree.train10.fs<-rpart(k ~ x1+x2,method="class", data=train10[-cvfolds[[i]],],control=rpart.control(maxdepth = j))
+tree.train10.pred.fs = predict(tree.train10.fs, newdata=train10[cvfolds[[i]],], type="class")
+ktest.fs<-as.matrix(train10[,1])[cvfolds[[i]],]
+tree.train10.err.fs[i,1] <- mean((ktest.fs != tree.train10.pred.fs))
+  }
+  tree.train10.err.mean.fs[j,1]<-mean(tree.train10.err.fs[,1])
+}
+
+#Find the maxdepth with the smallest cross-validated misclassification error
+depth<-which.min(tree.train10.err.mean.fs)
+paste("The parameter associated with minimum error is",depth,".")
+paste("The corresponding misclassification error is",tree.train10.err.mean.fs[depth,1],".")
+#display the corresponding results 
+tree.train10.final.fs<-rpart(k ~ x1+x2,
+  	method="class", data=train10,control=rpart.control(maxdepth = depth))
+printcp(tree.train10.final.fs)
+
+# plot the tree.train1 
+plot(tree.train10.final.fs, uniform=TRUE, main="Classification Tree for Train1")
+text(tree.train10.final.fs, use.n=TRUE, all=TRUE, cex=.8)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
